@@ -11,6 +11,8 @@ public:
 
 	int OpenClient();
 	int CloseClient();
+	void Run();
+
 	void ReceiveData();
 	int SendClientName();
 	int SendClientMessage();
@@ -22,4 +24,5 @@ private:
 	LibNetwork::TCPData m_data;
 	std::string m_name;
 	size_t m_offset;
+	LibNetwork::ClientEvents m_events;
 };

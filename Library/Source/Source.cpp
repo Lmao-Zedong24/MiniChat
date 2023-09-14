@@ -196,7 +196,7 @@ namespace LibNetwork {
 		return EXIT_SUCCESS;
 	}
 
-	TCPData& TCPData::WriteInBuffer(const char* info, size_t offset) 
+	TCPData& TCPData::WriteInBuffer(const char* info, size_t offset)
 	{
 		size_t infoLen = strlen(info);
 		size_t bufMax = (size_t)GetBufferSize();
@@ -218,7 +218,7 @@ namespace LibNetwork {
 	{
 	}
 
-	int ServerEvents::PoolEvents()
+	int ServerEvents::WaitForEvents()
 	{
 		static const int WAIT_TIME_MS = -1;
 
@@ -228,12 +228,17 @@ namespace LibNetwork {
 			return EXIT_WSAPool;
 		}
 
-		DebugMessage("Pool successfull\n");
+		DebugMessage("Wait successfull\n");
 		if (result == 0) {
-			DebugMessage("Nothing Pooled\n");
+			DebugMessage("Nothing Waited\n");
 		}
 
 		return result;
+	}
+
+	const uintptr_t& ServerEvents::GetSocketId(const int& index)
+	{
+		return m_events[index].fd;
 	}
 
 	int ServerEvents::AddServerEvent(const uintptr_t& serverId)
@@ -241,12 +246,12 @@ namespace LibNetwork {
 		if (!m_events.empty())
 			return EXIT_AddServerEvent;
 
-		this->AddEvent(serverId);
+		this->AddClientEvent(serverId);
 		return EXIT_SUCCESS;
 	}
 
 
-	void ServerEvents::AddEvent(const uintptr_t& socketId)
+	void ServerEvents::AddClientEvent(const uintptr_t& socketId)
 	{
 		if (m_unusedEventBuffer.empty()) {
 			DebugMessage("Emplace event successfull\n");
@@ -264,7 +269,7 @@ namespace LibNetwork {
 		for (int i = 0; i < m_events.size(); i++) {
 			if (m_events[i].fd == socketId) {
 				m_unusedEventBuffer.emplace(i);
-				m_events[i].fd = (SOCKET) - 1; //ignore when pooling
+				m_events[i].fd = (SOCKET)-1; //ignore when pooling
 				DebugMessage("Remove successfull");
 				break;
 			}
@@ -273,49 +278,35 @@ namespace LibNetwork {
 		DebugMessage("No Remove");
 	}
 
-	int ServerEvents::EvaluateEvents(uintptr_t& socketId, LibNetwork::TCPData& data, int indexHint = 0)
+	int ServerEvents::EvaluateEvents(uintptr_t& socketId, LibNetwork::TCPData& data, int& index)
 	{
 		int result;
-		if (indexHint == 0 && m_events[0].revents & POLLRDNORM) { //Server socket
-			if (Accept(m_events[0].fd, socketId) == EXIT_SUCCESS) {
-				DebugMessage("New Client successfull");
-				this->AddEvent(socketId);
-			} else {
-				DebugMessage("Error new Client");
-			}
-
-			return 1;
+		if (index == 0 && m_events[0].revents & POLLRDNORM) { //server socket
+			socketId = m_events[index].fd;
+			return (result = Accept(m_events[0].fd, socketId)) == EXIT_SUCCESS? 1 : result;
 		}
 
-		for (int i = indexHint; i < m_events.size(); i++) { //clients
-			if (!(m_events[i].revents & (POLLRDNORM | POLLERR))) //TODO : deal with EvaluateEvents POLLERR
-				continue;
-
-			if ((result = Receive(m_events[i].fd, data)) != EXIT_SUCCESS) { //error so disconnect
-				DebugMessage("Client disconected");
-				CloseSocket(m_events[i].fd);
-				this->RemoveEvent(m_events[i].fd);
-			
-				//TODO: if receive is to big do it twice
+		for (index; index < m_events.size(); index++) { //clients
+			if (m_events[index].revents & (POLLERR | POLLHUP | POLLRDNORM)) {
+				socketId = m_events[index].fd;
+				return (result = Receive(socketId, data)) == EXIT_SUCCESS? 0: result; //same as return Receive
 			}
-
-			return i + 1;
 		}
 
+		index++;
+		DebugMessage("End of Events\n");
 		return -1;
 	}
 
+	enum class ClientEvents::EventType {
+		Client,
+		Console
+	};
 
 	ClientEvents::ClientEvents()
 	{}
 
-	void ClientEvents::Run()
-	{
-		WaitForMultipleObjects(maxIndex + 1, FALSE, WAIT_TIME_MS);
-
-	}
-
-	int ClientEvents::AddEvent()
+	int ClientEvents::AddClientEvent(const uintptr_t& socketId)
 	{
 		HANDLE newEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
@@ -323,7 +314,71 @@ namespace LibNetwork {
 			ReportError(WSAGetLastError());
 			return EXIT_AddClientEvent;
 		}
+		int result = WSAEventSelect(socketId, newEvent, FD_READ | FD_WRITE);
 
-		m_events.emplace(std::move(newEvent));
+		if (result == SOCKET_ERROR) {
+			ReportError(WSAGetLastError());
+			return EXIT_AddClientEvent;
+		}
+		m_events.emplace_back(std::move(newEvent));
+		m_typeEventsBuffer.emplace_back(ClientEvents::EventType::Client);
+
+		int index = (int)m_events.size() - 1;
+		m_clientIds.emplace(index, socketId);
+
+		return index;
+	}
+
+	int ClientEvents::AddConsoleEvent()
+	{
+		HANDLE newEvent = GetStdHandle(STD_INPUT_HANDLE);
+
+		if (newEvent == INVALID_HANDLE_VALUE) {
+			ReportError(WSAGetLastError());
+			return EXIT_AddConsoleEvent;
+		}
+		DebugMessage("AddConsoleEvent\n");
+		m_events.emplace_back(std::move(newEvent));
+		m_typeEventsBuffer.emplace_back(ClientEvents::EventType::Console);
+
+		return (int)m_events.size() - 1;
+	}
+
+	void ClientEvents::RemoveEvent(const int& index)
+	{
+		index;
+	}
+
+	int ClientEvents::EvaluateEvent(const int& index, TCPData& data)
+	{
+		switch (m_typeEventsBuffer[index])
+		{
+		case EventType::Client: return Receive(m_clientIds[index], data);  break;
+		case EventType::Console: /*TODO: do console here a bit*/ data.type = TCPDataType::DEFAULT;  break;
+		default: break;
+		}
+
+		return EXIT_SUCCESS;
+	}
+
+	static int I = 0;
+	int ClientEvents::WaitForEvents(int& index)
+	{
+		DWORD result = WaitForMultipleObjects((DWORD)m_events.size(), m_events.data(), FALSE, INFINITE);
+
+		if (result == WAIT_FAILED) {
+			ReportError(WSAGetLastError());
+			index = -1;
+			return EXIT_WaitForMultipleObj;
+		}
+
+		if (result < 0) {
+			index = result + WAIT_ABANDONED_0;
+			return EXIT_WaitForMultipleObj;
+		}
+
+		DebugMessage("Wait successfull: %d\n", I++);
+		index = result;
+		return EXIT_SUCCESS;
 	}
 }

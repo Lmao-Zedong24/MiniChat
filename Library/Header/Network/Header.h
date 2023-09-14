@@ -5,6 +5,7 @@
 #include <vector>
 #include <Winsock2.h>
 #include <unordered_set>
+#include <unordered_map>
 
 
 namespace LibNetwork {
@@ -34,22 +35,24 @@ namespace LibNetwork {
 		ServerEvents();
 
 		int AddServerEvent(const uintptr_t& serverId);
-		void AddEvent(const uintptr_t& socketId);
+		void AddClientEvent(const uintptr_t& socketId);
 		void RemoveEvent(const uintptr_t& socketId);
 		/// <summary>
 		/// 
 		/// </summary>
-		/// <param name="socketId">: event's socket id [out]</param>
+		/// <param name="socketId">: new clients event's socket id [out]</param>
 		/// <param name="data">: data read form socket [out]</param>
-		/// <param name="indexHint">: check events starting from hint</param>
-		/// <returns> 1 if accepted new client, indexHint for next function call or -1 if reached end</returns>
-		int EvaluateEvents(uintptr_t& socketId, LibNetwork::TCPData& data, int indexHint);
+		/// <param name="index">: check events starting from hint [in/out]</param>
+		/// <returns> 0 if receive from client, 1 if accept, or negative error code</returns>
+		int EvaluateEvents(uintptr_t& socketId, LibNetwork::TCPData& data, int& index);
 
 		/// <summary>
 		/// 
 		/// </summary>
 		/// <returns>Number of events that have queried status, or negative error code</returns>
-		int PoolEvents();
+		int WaitForEvents();
+
+		const uintptr_t& GetSocketId(const int& index);
 
 	private:
 		std::vector<pollfd> m_events;
@@ -61,11 +64,35 @@ namespace LibNetwork {
 	public:
 		ClientEvents();
 
-		void Run();
-		int AddEvent();
+		enum class EventType;
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="socketId"></param>
+		/// <returns>Event's index, or negative error code</returns>
+		int AddClientEvent(const uintptr_t& socketId);
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <returns>Event's index, or negative error code</returns>
+		int AddConsoleEvent();
+		void RemoveEvent(const int& index);
+		int EvaluateEvent(const int& index, TCPData& data);
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="index">: the signaled handle's index or -1 if none signaled</param>
+		/// <returns>EXIT_SUCCESS or negative error code</returns>
+		int WaitForEvents(int& index);
+
+		const std::vector<HANDLE>& Events() { return m_events; }
 
 	private:
-		std::unordered_set<HANDLE> m_events;
+		std::vector<HANDLE> m_events;
+		std::vector<EventType> m_typeEventsBuffer;
+		std::unordered_map<int, uintptr_t> m_clientIds;
 	};
 
 	int Initialize();

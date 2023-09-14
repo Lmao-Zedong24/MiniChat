@@ -25,7 +25,7 @@ int ChatServer::OpenServer()
 	if ((result = Listen(m_serverSocket, NUM_CLIENTS)) != EXIT_SUCCESS)
 		return result;
 
-	m_events.AddEvent(m_serverSocket);
+	m_events.AddClientEvent(m_serverSocket);
 
 	return EXIT_SUCCESS;
 }
@@ -49,27 +49,28 @@ int ChatServer::CloseServer()
 
 int ChatServer::Run()
 {
-	uintptr_t socketId;
 	LibNetwork::TCPData data;
 
 	while (true) { //main loop
-		int numEvents = m_events.PoolEvents();
-		int hint = 0;
+		int numEvents = m_events.WaitForEvents();
+		int eventIndex = 0;
+		uintptr_t socketId = (uintptr_t)-1;
 		while(numEvents-- > 0) {
-			hint = m_events.EvaluateEvents(socketId, data, hint); //accept and receive here
+			int result = m_events.EvaluateEvents(socketId, data, eventIndex); //accept and receive here
 
-			if (hint == -1) {
-				DebugMessage("Ya donne f*cked EvaluateEvents");
-				numEvents = 0;
+			if (result < 0) {
+				DebugMessage("Ya donne Error EvaluateEvents\n");
+				if (eventIndex != 0) //if not accept error, remove client
+					this->RemoveClient(eventIndex);
 			}
-			else if (hint == 1) { //accepted so needs name
-				this->m_clientSockets.push_back(socketId);
+			else if (result == 1) { //accepted so needs name
+				this->AddClient(socketId);
+
 				data.type = TCPDataType::NAME;
 				data.WriteInBuffer("");
-				if (Send(socketId, data) != EXIT_SUCCESS)
-					DebugMessage(TEXT("YOu Fucked the send"));
+				Send(socketId, data);// != EXIT_SUCCESS TODO: send error EvaluateEvents
 			}
-			else { //received
+			else if (result == 0){ //received
 				switch (data.type)
 				{
 				case TCPDataType::MESSAGE: DebugMessage("Got MESSAGE\n");	this->SendDataToClients(data, socketId); break; //rellay message to other clients
@@ -82,6 +83,8 @@ int ChatServer::Run()
 					break;
 				}
 			}
+
+			eventIndex++; //so that next evaluate only checks after current events 
 		}
 	}
 }
@@ -122,6 +125,22 @@ void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
 	}
 
 	//TODO: deal with send errors
+}
+
+void ChatServer::AddClient(const uintptr_t& socketId)
+{
+	m_clientSockets.push_back(socketId);
+	m_events.AddClientEvent(socketId);
+}
+
+void ChatServer::RemoveClient(const int& index)
+{
+	if (index >= m_clientSockets.size())
+		return;
+
+	m_clientNames.erase(m_clientSockets[index]);
+	m_events.RemoveEvent(m_clientSockets[index]);
+	m_clientSockets.erase(m_clientSockets.begin() + index);
 }
 
 //void ChatServer::InterpretReceive(	int result,

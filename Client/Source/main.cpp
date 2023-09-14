@@ -31,12 +31,7 @@ int main()
 	if ((result = client.OpenClient()) != EXIT_SUCCESS)
 		return result;
 
-	while (true) {
-		client.ReceiveData();
-
-		if ((result = client.SendClientMessage()) != EXIT_SUCCESS)
-			return result;
-	}
+	client.Run();
 	
 	if ((result = client.CloseClient()) != EXIT_SUCCESS)
 		return result;

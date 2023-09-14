@@ -20,7 +20,10 @@ public:
 	inline static const int NUM_CLIENTS = 2; //TODO: put good number here
 	inline static const char* NEW_CLIENT_MESSAGE = " has joined the server.";
 	//inline static const char* ASK_NAME_MESSAGE = "Please enter UserName: ";
-public:
+private:
+	void AddClient(const uintptr_t& socketId);
+	void RemoveClient(const int& index);
+
 	std::unordered_map<uintptr_t, std::string> m_clientNames;
 	std::vector<uintptr_t> m_clientSockets;
 	LibNetwork::ServerEvents m_events;

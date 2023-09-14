@@ -6,22 +6,29 @@
 
 using namespace LibNetwork;
 
-ChatClient::ChatClient() : m_clientSocket(0), m_offset(0)
+ChatClient::ChatClient() : m_clientSocket(), m_offset()
 {
 }
 
 int ChatClient::OpenClient()
 {
-	int result = Initialize();
-	if (result != EXIT_SUCCESS)
+	int result;
+	if ((result = Initialize()) != EXIT_SUCCESS)
 		return result;
 
-	result = CreateSocket(m_clientSocket);
-	if (result != EXIT_SUCCESS)
+	if ((result = CreateSocket(m_clientSocket)) != EXIT_SUCCESS)
 		return result;
 
-	result = Connect(m_clientSocket);
-	return result;
+	if ((result = Connect(m_clientSocket)) != EXIT_SUCCESS)
+		return result;
+
+	if ((result = m_events.AddClientEvent(m_clientSocket)) < 0)
+		return result;
+
+	if ((result = m_events.AddConsoleEvent()) < 0)
+		return result;
+
+	return EXIT_SUCCESS;
 }
 
 int ChatClient::CloseClient()
@@ -31,6 +38,46 @@ int ChatClient::CloseClient()
 		return result;
 
 	return Disconnect();
+}
+
+void ChatClient::Run()
+{
+	INPUT_RECORD lpBuffer[100];
+	while (true) {
+		int index;
+		int result = m_events.WaitForEvents(index);
+
+		if (result != EXIT_SUCCESS) {
+			if (index == -1) { //ERROR in wait 
+				DebugMessage("ERROR in wait, return");
+				return;
+			}
+			else { //Aborted index
+				DebugMessage("Aborted event, return");
+				m_events.RemoveEvent(index);
+				return;
+			}
+		}
+
+		if ((result = m_events.EvaluateEvent(index, m_data)) != EXIT_SUCCESS) {
+			//TODO: ChatClient::EvaluateEvent error
+			DebugMessage("ChatClient::EvaluateEvent error");
+			return;
+		}
+
+		DWORD tmp;
+		switch (m_data.type)
+		{
+		case TCPDataType::MESSAGE:	ConsoleMessage(m_data.buffer); break;
+		case TCPDataType::NAME:		SendClientName(); break;
+		case TCPDataType::DEFAULT:	GetNumberOfConsoleInputEvents(m_events.Events()[index], &tmp);
+									DebugMessage("Num Inputs: %d\n", (int)tmp);
+									ReadConsoleInput(m_events.Events()[index], &lpBuffer[0], ARRAYSIZE(lpBuffer), &tmp);
+									break;//if evaluated console go here
+		default: break;
+		}
+		
+	}
 }
 
 void ChatClient::ReceiveData()
@@ -76,3 +123,5 @@ int ChatClient::SendClientMessage()
 	m_data.WriteInBuffer(GetUserInput().c_str(), m_offset);
 	return Send(m_clientSocket, m_data);
 }
+
+//int TestConsoleInput();

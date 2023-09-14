@@ -9,7 +9,10 @@ constexpr int EXIT_listen =				105;
 constexpr int EXIT_send =				106;
 constexpr int EXIT_recv =				107;
 constexpr int EXIT_connectionClosed =	108;
-constexpr int EXIT_WSAPool =			-109;
-constexpr int EXIT_CreateEvent =		110;
-constexpr int EXIT_AddServerEvent =		111;
-constexpr int EXIT_AddClientEvent =		112;
+constexpr int EXIT_CreateEvent =		109;
+constexpr int EXIT_AddServerEvent =		110;
+
+constexpr int EXIT_WSAPool =			-100;
+constexpr int EXIT_WaitForMultipleObj = -101;
+constexpr int EXIT_AddClientEvent =		-102;
+constexpr int EXIT_AddConsoleEvent =	-103;
