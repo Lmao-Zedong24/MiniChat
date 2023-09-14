@@ -22,7 +22,7 @@ public:
 	//inline static const char* ASK_NAME_MESSAGE = "Please enter UserName: ";
 private:
 	void AddClient(const uintptr_t& socketId);
-	void RemoveClient(const int& index);
+	void RemoveClient(const uintptr_t& socketId);
 
 	std::unordered_map<uintptr_t, std::string> m_clientNames;
 	std::vector<uintptr_t> m_clientSockets;

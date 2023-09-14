@@ -61,7 +61,7 @@ int ChatServer::Run()
 			if (result < 0) {
 				DebugMessage("Ya donne Error EvaluateEvents\n");
 				if (eventIndex != 0) //if not accept error, remove client
-					this->RemoveClient(eventIndex);
+					this->RemoveClient(socketId);
 			}
 			else if (result == 1) { //accepted so needs name
 				this->AddClient(socketId);
@@ -133,14 +133,17 @@ void ChatServer::AddClient(const uintptr_t& socketId)
 	m_events.AddClientEvent(socketId);
 }
 
-void ChatServer::RemoveClient(const int& index)
+void ChatServer::RemoveClient(const uintptr_t& socketId)
 {
-	if (index >= m_clientSockets.size())
-		return;
+	m_events.RemoveEvent(socketId);
+	m_clientNames.erase(socketId);
 
-	m_clientNames.erase(m_clientSockets[index]);
-	m_events.RemoveEvent(m_clientSockets[index]);
-	m_clientSockets.erase(m_clientSockets.begin() + index);
+	for (auto itt = m_clientSockets.begin(); itt != m_clientSockets.end(); itt++) {
+		if (*itt == socketId) {
+			m_clientSockets.erase(itt);
+			break;
+		}
+	}
 }
 
 //void ChatServer::InterpretReceive(	int result,

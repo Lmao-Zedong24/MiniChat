@@ -270,12 +270,12 @@ namespace LibNetwork {
 			if (m_events[i].fd == socketId) {
 				m_unusedEventBuffer.emplace(i);
 				m_events[i].fd = (SOCKET)-1; //ignore when pooling
-				DebugMessage("Remove successfull");
-				break;
+				DebugMessage("Remove successfull\n");
+				return;
 			}
 		}
 
-		DebugMessage("No Remove");
+		DebugMessage("No Remove\n");
 	}
 
 	int ServerEvents::EvaluateEvents(uintptr_t& socketId, LibNetwork::TCPData& data, int& index)
@@ -283,13 +283,13 @@ namespace LibNetwork {
 		int result;
 		if (index == 0 && m_events[0].revents & POLLRDNORM) { //server socket
 			socketId = m_events[index].fd;
-			return (result = Accept(m_events[0].fd, socketId)) == EXIT_SUCCESS? 1 : result;
+			return (result = Accept(m_events[0].fd, socketId)) == EXIT_SUCCESS? 1 : -1;
 		}
 
 		for (index; index < m_events.size(); index++) { //clients
 			if (m_events[index].revents & (POLLERR | POLLHUP | POLLRDNORM)) {
 				socketId = m_events[index].fd;
-				return (result = Receive(socketId, data)) == EXIT_SUCCESS? 0: result; //same as return Receive
+				return (result = Receive(socketId, data)) == EXIT_SUCCESS? 0: -1; //same as return Receive
 			}
 		}
 
