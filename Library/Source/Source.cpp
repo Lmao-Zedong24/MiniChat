@@ -210,7 +210,7 @@ namespace LibNetwork {
 
 	size_t TCPData::GetBufferSize()
 	{
-		return sizeof(this->buffer);
+		return ARRAYSIZE(TCPData::buffer);
 	}
 
 
@@ -269,7 +269,7 @@ namespace LibNetwork {
 		for (int i = 0; i < m_events.size(); i++) {
 			if (m_events[i].fd == socketId) {
 				m_unusedEventBuffer.emplace(i);
-				m_events[i].fd = (SOCKET)-1; //ignore when pooling
+				m_events[i].fd = (SOCKET)-1;	//ignore when pooling
 				DebugMessage("Remove successfull\n");
 				return;
 			}
@@ -303,7 +303,7 @@ namespace LibNetwork {
 		Console
 	};
 
-	ClientEvents::ClientEvents()
+	ClientEvents::ClientEvents() : m_lpBuffer()
 	{}
 
 	int ClientEvents::AddClientEvent(const uintptr_t& socketId)
@@ -349,12 +349,12 @@ namespace LibNetwork {
 		index;
 	}
 
-	int ClientEvents::EvaluateEvent(const int& index, TCPData& data)
+	int ClientEvents::EvaluateEvent(const int& index, TCPData& data, std::list<std::string>& allMessages, const size_t& maxMessageLen)
 	{
 		switch (m_typeEventsBuffer[index])
 		{
 		case EventType::Client: return Receive(m_clientIds[index], data);  break;
-		case EventType::Console: /*TODO: do console here a bit*/ data.type = TCPDataType::DEFAULT;  break;
+		case EventType::Console: allMessages = this->ReadKeyboardInput(index, maxMessageLen);  break;
 		default: break;
 		}
 
@@ -380,5 +380,46 @@ namespace LibNetwork {
 		DebugMessage("Wait successfull: %d\n", I++);
 		index = result;
 		return EXIT_SUCCESS;
+	}
+
+	void ClientEvents::ClearConsoleInputs()
+	{
+		DWORD num;
+		for (int i = 0; i < m_typeEventsBuffer.size(); i++) {
+			if (m_typeEventsBuffer[i] == EventType::Console)
+				ReadConsoleInput(m_events[i], &m_lpBuffer[0], ARRAYSIZE(m_lpBuffer), &num);
+		}
+	}
+
+	std::list<std::string> ClientEvents::ReadKeyboardInput(const int& index, const size_t& maxLen)
+	{
+		DWORD num;
+		std::list<std::string> messages;
+		//GetNumberOfConsoleInputEvents(m_events[index], &num);
+		//DebugMessage("Num Inputs: %d\n", (int)num);
+
+		ReadConsoleInput(m_events[index], &m_lpBuffer[0], ARRAYSIZE(m_lpBuffer), &num);
+		for (DWORD i = 0; i < num; i++)
+		{
+			switch (m_lpBuffer[i].EventType)
+			{
+			case KEY_EVENT: 
+				if (m_lpBuffer[i].Event.KeyEvent.bKeyDown) {
+					TCHAR c = ConvertUchar(m_lpBuffer[i].Event.KeyEvent.uChar);
+					m_inputMessage += c;
+					//ConsoleMessage(&m_inputMessage.back());
+
+					if (c == TEXT('\r') || m_inputMessage.length() >= maxLen) {
+						messages.emplace_back(std::move(m_inputMessage));
+					}
+				}
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		return messages;
 	}
 }

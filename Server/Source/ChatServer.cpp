@@ -55,6 +55,8 @@ int ChatServer::Run()
 		int numEvents = m_events.WaitForEvents();
 		int eventIndex = 0;
 		uintptr_t socketId = (uintptr_t)-1;
+		data.type = TCPDataType::DEFAULT;
+
 		while(numEvents-- > 0) {
 			int result = m_events.EvaluateEvents(socketId, data, eventIndex); //accept and receive here
 
@@ -68,15 +70,18 @@ int ChatServer::Run()
 
 				data.type = TCPDataType::NAME;
 				data.WriteInBuffer("");
-				Send(socketId, data);// != EXIT_SUCCESS TODO: send error EvaluateEvents
+				if (Send(socketId, data) != EXIT_SUCCESS)
+					this->RemoveClient(socketId);
 			}
 			else if (result == 0){ //received
 				switch (data.type)
 				{
 				case TCPDataType::MESSAGE: DebugMessage("Got MESSAGE\n");	this->SendDataToClients(data, socketId); break; //rellay message to other clients
-				case TCPDataType::NAME: DebugMessage("Got NAME\n");	this->SendDataToClients(data.WriteInBuffer(NEW_CLIENT_MESSAGE, //add to message and rellay to other clients
-																		  (	(m_clientNames.emplace(socketId, data.buffer).first)->second.length())),
-																	socketId); break;
+				case TCPDataType::NAME: DebugMessage("Got NAME\n");	
+										data.type = TCPDataType::MESSAGE;
+										data.WriteInBuffer(	NEW_CLIENT_MESSAGE, //add to message and rellay to other clients
+															(m_clientNames.emplace(socketId, data.buffer).first)->second.length());
+										this->SendDataToClients(data, socketId); break;
 				case TCPDataType::DISCONNECT: //TODO: disconnect client
 				case TCPDataType::DEFAULT:	//TODO: default client
 				default:

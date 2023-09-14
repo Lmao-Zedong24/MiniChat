@@ -42,10 +42,10 @@ int ChatClient::CloseClient()
 
 void ChatClient::Run()
 {
-	INPUT_RECORD lpBuffer[100];
 	while (true) {
 		int index;
 		int result = m_events.WaitForEvents(index);
+		m_data.type = TCPDataType::DEFAULT;
 
 		if (result != EXIT_SUCCESS) {
 			if (index == -1) { //ERROR in wait 
@@ -59,21 +59,25 @@ void ChatClient::Run()
 			}
 		}
 
-		if ((result = m_events.EvaluateEvent(index, m_data)) != EXIT_SUCCESS) {
+		std::list<std::string> clientMessages;
+		if ((result = m_events.EvaluateEvent(index, m_data, clientMessages, TCPData::GetBufferSize() - m_offset)) != EXIT_SUCCESS) {
 			//TODO: ChatClient::EvaluateEvent error
 			DebugMessage("ChatClient::EvaluateEvent error");
-			return;
+			//return;
 		}
 
-		DWORD tmp;
+		if (!clientMessages.empty()) {
+			for (auto& message: clientMessages)
+				this->SendClientMessage(message);
+
+			continue;
+		}
+
 		switch (m_data.type)
 		{
 		case TCPDataType::MESSAGE:	ConsoleMessage(m_data.buffer); break;
 		case TCPDataType::NAME:		SendClientName(); break;
-		case TCPDataType::DEFAULT:	GetNumberOfConsoleInputEvents(m_events.Events()[index], &tmp);
-									DebugMessage("Num Inputs: %d\n", (int)tmp);
-									ReadConsoleInput(m_events.Events()[index], &lpBuffer[0], ARRAYSIZE(lpBuffer), &tmp);
-									break;//if evaluated console go here
+		case TCPDataType::DEFAULT:	
 		default: break;
 		}
 		
@@ -114,13 +118,14 @@ int ChatClient::SendClientName()
 	m_data.WriteInBuffer(MESSAGE_SEPARATOR.c_str(), m_name.length());
 	m_offset = m_name.length() + MESSAGE_SEPARATOR.length();
 
+	m_events.ClearConsoleInputs();
 	return result;
 }
 
-int ChatClient::SendClientMessage()
+int ChatClient::SendClientMessage(const std::string& message)
 {
 	m_data.type = LibNetwork::TCPDataType::MESSAGE;
-	m_data.WriteInBuffer(GetUserInput().c_str(), m_offset);
+	m_data.WriteInBuffer(message.c_str(), m_offset);
 	return Send(m_clientSocket, m_data);
 }
 

@@ -15,7 +15,7 @@ public:
 
 	void ReceiveData();
 	int SendClientName();
-	int SendClientMessage();
+	int SendClientMessage(const std::string& message);
 
 	static inline const int MAX_NAME_LENGTH = 10;
 	static inline const std::string MESSAGE_SEPARATOR = "> ";

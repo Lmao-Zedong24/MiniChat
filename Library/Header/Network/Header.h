@@ -6,9 +6,16 @@
 #include <Winsock2.h>
 #include <unordered_set>
 #include <unordered_map>
+#include <string>
 
 
 namespace LibNetwork {
+
+#ifdef UNICODE
+	#define ConvertUchar(c) c.UnicodeChar
+#else
+	#define ConvertUchar(c) c.AsciiChar
+#endif
 
 	constexpr int PORT = 43210; //TODO : Put better port number
 
@@ -22,7 +29,7 @@ namespace LibNetwork {
 	struct TCPData
 	{
 		TCPData& WriteInBuffer(const char* info, size_t offset = 0);
-		size_t GetBufferSize();
+		static size_t GetBufferSize();
 
 		TCPDataType type = TCPDataType::DEFAULT;
 		char buffer[99] = {};
@@ -78,7 +85,14 @@ namespace LibNetwork {
 		/// <returns>Event's index, or negative error code</returns>
 		int AddConsoleEvent();
 		void RemoveEvent(const int& index);
-		int EvaluateEvent(const int& index, TCPData& data);
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="index">: [in]</param>
+		/// <param name="data">: [out]</param>
+		/// <param name="consoleInput">: [out]</param>
+		/// <returns></returns>
+		int EvaluateEvent(const int& index, TCPData& data, std::list<std::string>& consoleInput, const size_t& maxMessageLen);
 
 		/// <summary>
 		/// 
@@ -87,12 +101,24 @@ namespace LibNetwork {
 		/// <returns>EXIT_SUCCESS or negative error code</returns>
 		int WaitForEvents(int& index);
 
+		void ClearConsoleInputs();
+
 		const std::vector<HANDLE>& Events() { return m_events; }
 
 	private:
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="index">: [in]</param>
+		/// <returns>consoleInput</returns>
+		std::list<std::string> ReadKeyboardInput(const int& index, const size_t& maxLen = 0);
+
+
 		std::vector<HANDLE> m_events;
 		std::vector<EventType> m_typeEventsBuffer;
 		std::unordered_map<int, uintptr_t> m_clientIds;
+		INPUT_RECORD m_lpBuffer[99];
+		std::string m_inputMessage;
 	};
 
 	int Initialize();
