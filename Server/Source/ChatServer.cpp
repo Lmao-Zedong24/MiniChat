@@ -110,8 +110,9 @@ void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
 	}
 
 	//TODO: deal with send errors
-	if (!errorSocketBuffer.empty())
+	if (!errorSocketBuffer.empty()) {
 		DebugMessage(TEXT("YOu Fucked the send to all"));
+	}
 }
 
 void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,

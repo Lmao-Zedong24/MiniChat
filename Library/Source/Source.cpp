@@ -304,7 +304,9 @@ namespace LibNetwork {
 	};
 
 	ClientEvents::ClientEvents() : m_lpBuffer()
-	{}
+	{
+		m_inputMessage.emplace_back(std::string());
+	}
 
 	int ClientEvents::AddClientEvent(const uintptr_t& socketId)
 	{
@@ -349,7 +351,7 @@ namespace LibNetwork {
 		index;
 	}
 
-	int ClientEvents::EvaluateEvent(const int& index, TCPData& data, std::list<std::string>& allMessages, const size_t& maxMessageLen)
+	int ClientEvents::EvaluateEvent(const int& index, TCPData& data, std::vector<std::string>& allMessages, const size_t& maxMessageLen)
 	{
 		switch (m_typeEventsBuffer[index])
 		{
@@ -391,12 +393,11 @@ namespace LibNetwork {
 		}
 	}
 
-	std::list<std::string> ClientEvents::ReadKeyboardInput(const int& index, const size_t& maxLen)
+	std::vector<std::string> ClientEvents::ReadKeyboardInput(const int& index, const size_t& maxLen)
 	{
 		DWORD num;
-		std::list<std::string> messages;
-		//GetNumberOfConsoleInputEvents(m_events[index], &num);
-		//DebugMessage("Num Inputs: %d\n", (int)num);
+		m_inputMessage.back().reserve(maxLen);
+		std::vector<std::string> message;
 
 		ReadConsoleInput(m_events[index], &m_lpBuffer[0], ARRAYSIZE(m_lpBuffer), &num);
 		for (DWORD i = 0; i < num; i++)
@@ -405,12 +406,27 @@ namespace LibNetwork {
 			{
 			case KEY_EVENT: 
 				if (m_lpBuffer[i].Event.KeyEvent.bKeyDown) {
-					TCHAR c = ConvertUchar(m_lpBuffer[i].Event.KeyEvent.uChar);
-					m_inputMessage += c;
-					//ConsoleMessage(&m_inputMessage.back());
+					TCHAR c[2] = { ConvertUchar(m_lpBuffer[i].Event.KeyEvent.uChar), TEXT('\0') };
 
-					if (c == TEXT('\r') || m_inputMessage.length() >= maxLen) {
-						messages.emplace_back(std::move(m_inputMessage));
+					if (c[0] == TEXT('\r')){
+						if (m_inputMessage[0].empty()) {
+							ConsoleMessage("\n\b");
+						}
+						else {
+							message = std::move(m_inputMessage);
+							m_inputMessage.emplace_back("");
+							ConsoleMessage("\n");
+						}
+						continue;
+					}
+
+					m_inputMessage.back() += c[0];
+
+					ConsoleMessage(&c[0]);
+					if (m_inputMessage.back().length() >= maxLen - 1) {
+						m_inputMessage.back() += '\0';
+						m_inputMessage.emplace_back("");
+						m_inputMessage.back().reserve(maxLen);
 					}
 				}
 				break;
@@ -420,6 +436,6 @@ namespace LibNetwork {
 			}
 		}
 
-		return messages;
+		return message;
 	}
 }

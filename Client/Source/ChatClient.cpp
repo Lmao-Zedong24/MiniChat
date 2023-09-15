@@ -59,7 +59,7 @@ void ChatClient::Run()
 			}
 		}
 
-		std::list<std::string> clientMessages;
+		std::vector<std::string> clientMessages;
 		if ((result = m_events.EvaluateEvent(index, m_data, clientMessages, TCPData::GetBufferSize() - m_offset)) != EXIT_SUCCESS) {
 			//TODO: ChatClient::EvaluateEvent error
 			DebugMessage("ChatClient::EvaluateEvent error");
@@ -67,6 +67,7 @@ void ChatClient::Run()
 		}
 
 		if (!clientMessages.empty()) {
+			ConsoleMessage((m_name + MESSAGE_SEPARATOR).c_str());
 			for (auto& message: clientMessages)
 				this->SendClientMessage(message);
 
@@ -119,13 +120,14 @@ int ChatClient::SendClientName()
 	m_offset = m_name.length() + MESSAGE_SEPARATOR.length();
 
 	m_events.ClearConsoleInputs();
+	ConsoleMessage(m_data.buffer);
 	return result;
 }
 
 int ChatClient::SendClientMessage(const std::string& message)
 {
 	m_data.type = LibNetwork::TCPDataType::MESSAGE;
-	m_data.WriteInBuffer(message.c_str(), m_offset);
+	m_data.WriteInBuffer((m_name + MESSAGE_SEPARATOR + message).c_str());
 	return Send(m_clientSocket, m_data);
 }
 

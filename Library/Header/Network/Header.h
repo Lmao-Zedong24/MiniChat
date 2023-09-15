@@ -92,7 +92,7 @@ namespace LibNetwork {
 		/// <param name="data">: [out]</param>
 		/// <param name="consoleInput">: [out]</param>
 		/// <returns></returns>
-		int EvaluateEvent(const int& index, TCPData& data, std::list<std::string>& consoleInput, const size_t& maxMessageLen);
+		int EvaluateEvent(const int& index, TCPData& data, std::vector<std::string>& consoleInput, const size_t& maxMessageLen);
 
 		/// <summary>
 		/// 
@@ -111,14 +111,14 @@ namespace LibNetwork {
 		/// </summary>
 		/// <param name="index">: [in]</param>
 		/// <returns>consoleInput</returns>
-		std::list<std::string> ReadKeyboardInput(const int& index, const size_t& maxLen = 0);
+		std::vector<std::string> ReadKeyboardInput(const int& index, const size_t& maxLen = 0);
 
 
 		std::vector<HANDLE> m_events;
 		std::vector<EventType> m_typeEventsBuffer;
 		std::unordered_map<int, uintptr_t> m_clientIds;
 		INPUT_RECORD m_lpBuffer[99];
-		std::string m_inputMessage;
+		std::vector<std::string> m_inputMessage;
 	};
 
 	int Initialize();

@@ -1,8 +1,8 @@
 #pragma once
-
 #include <string>
+#include <tchar.h>
 
-#if 1
+#if 0
 #include <tchar.h>
 #define DebugMessage(...)  _tprintf(__VA_ARGS__)
 #else 

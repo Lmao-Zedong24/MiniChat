@@ -42,26 +42,4 @@ int main()
 		return result;
 
 	return EXIT_SUCCESS;
-
-
-	//for (int i = 0; i < ChatServer::NUM_CLIENTS; i++){ //need 2 to continue
-	//	server.m_clientSockets.push_back(0);
-	//	result = Accept(server.m_serverSocket, server.m_clientSockets.back());
-	//	if (result != EXIT_SUCCESS)
-	//		return result;
-	//}
-
-	//while (!server.m_clientSockets.empty()) { //main loop
-	//	std::unordered_set<int> closeSocketBuffer;
-	//	TCPData data;
-	//	for (int i = 0; i < server.m_clientSockets.size(); i++) {
-	//		result = Receive(server.m_clientSockets[i], data);
-	//		server.InterpretReceive(result, i, data, closeSocketBuffer);
-	//	}
-
-	//	for (auto& closeSocket : closeSocketBuffer) { //close clientSockets
-	//		if ((result = CloseSocket(closeSocket)) != EXIT_SUCCESS)
-	//			return result;
-	//	}
-	//}
 }
