@@ -2,6 +2,7 @@
 #include "NetworkErrors.h"
 #include "InputOutput.h"
 #include <vector>
+#include <type_traits>
 
 #ifdef UNICODE
 #undef UNICODE
@@ -54,7 +55,7 @@ namespace LibNetwork {
 			DebugMessage("Winsock incompatible\n");
 		}
 
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
 	int Disconnect()
@@ -67,12 +68,12 @@ namespace LibNetwork {
 		}
 
 		DebugMessage("Disconnect successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	int CreateSocket(uintptr_t& socketId)
+	int CreateSocket(uintptr_t& socketId, bool isIPV4)
 	{
-		SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		SOCKET s = socket(isIPV4? AF_INET: AF_INET6, SOCK_STREAM, IPPROTO_TCP);
 
 		if (s == INVALID_SOCKET){
 			ReportError(WSAGetLastError());
@@ -81,7 +82,7 @@ namespace LibNetwork {
 		socketId = (uintptr_t)s;
 
 		DebugMessage("CreateSocket successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
 	int CloseSocket(const uintptr_t& socketId)
@@ -94,17 +95,33 @@ namespace LibNetwork {
 		}
 
 		DebugMessage("CloseSocket successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	int BindSocket(const uintptr_t& serverSocket)
+	int BindSocket(const uintptr_t& serverSocket, bool isIPV4)
 	{
-		sockaddr_in name;
-		name.sin_family = AF_INET;
-		InetPton(AF_INET, TEXT("127.0.0.1"), &name.sin_addr.S_un.S_addr); // 127.0.0.1 is self
-		name.sin_port = htons(PORT);
+		//sockaddr_in name;
+		//name.sin_family = AF_INET;
+		//InetPton(AF_INET, ADRESS_ANY_IPV4, &name.sin_addr.S_un.S_addr);
+		//name.sin_port = htons(PORT_NUMBER);
 
-		int result = bind((SOCKET)serverSocket, (sockaddr*) &name, sizeof(name));
+		sockaddr* addrInfo = nullptr;
+		sockaddr_in addrInfoIPV4 = {};
+		sockaddr_in6 addrInfoIPV6 = {};
+		if (isIPV4) { //AF_INET
+			addrInfoIPV4.sin_family = AF_INET;
+			InetPton(AF_INET, "0.0.0.0", &addrInfoIPV4.sin_addr.S_un.S_addr);
+			addrInfoIPV4.sin_port = htons(PORT_NUMBER);
+			addrInfo = (sockaddr*)&addrInfoIPV4;
+		}
+		else { //AF_INET6
+			addrInfoIPV6.sin6_family = AF_INET6;
+			InetPton(AF_INET6, "::", &addrInfoIPV6.sin6_addr);
+			addrInfoIPV6.sin6_port = htons(PORT_NUMBER);
+			addrInfo = (sockaddr*)&addrInfoIPV6;
+		}
+
+		int result = bind((SOCKET)serverSocket, addrInfo, isIPV4? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
 
 		if (result == SOCKET_ERROR) {
 			ReportError(WSAGetLastError());
@@ -112,10 +129,10 @@ namespace LibNetwork {
 		}
 
 		DebugMessage("BindSocket successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	int Listen(const uintptr_t& serverSocket, int backlog = SOMAXCONN)
+	int Listen(const uintptr_t& serverSocket, int backlog)
 	{
 		int result = listen((SOCKET)serverSocket, backlog);
 		if (result == SOCKET_ERROR) {
@@ -124,7 +141,7 @@ namespace LibNetwork {
 		}
 
 		DebugMessage("Listen successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
 	int Accept(const uintptr_t& serverSocket, uintptr_t& clientSocket)
@@ -138,17 +155,42 @@ namespace LibNetwork {
 
 		clientSocket = (long long)acceptSocket;
 		DebugMessage("Accept successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	int Connect(const uintptr_t& clientSocket)
-	{
-		sockaddr_in name;
-		name.sin_family = AF_INET;
-		InetPton(AF_INET, TEXT("127.0.0.1"), &name.sin_addr.S_un.S_addr); // 127.0.0.1 is self
-		name.sin_port = htons(PORT);
+	ADDRESS_FAMILY AdressFamilly(const std::string& address) {
+		return address.find(':') != std::string::npos ? AF_INET6 : AF_INET;
+	}
 
-		int result = connect((SOCKET)clientSocket, (sockaddr*)&name, sizeof(name));
+	int Connect(const uintptr_t& clientSocket, const std::string& address)
+	{
+		ADDRESS_FAMILY family = AdressFamilly(address);
+
+		sockaddr* addrInfo;
+		sockaddr_in addrInfoIPV4 = {};
+		sockaddr_in6 addrInfoIPV6 = {};
+		if (family == AF_INET) {
+			addrInfoIPV4.sin_family = AF_INET;
+			InetPton(AF_INET, TEXT(address.c_str()), &addrInfoIPV4.sin_addr.S_un.S_addr); // 127.0.0.1 is self
+			addrInfoIPV4.sin_port = htons(PORT_NUMBER);
+			addrInfo = (sockaddr*)&addrInfoIPV4;
+		}
+		else {
+			addrInfoIPV6.sin6_family = AF_INET6;
+			InetPton(AF_INET6, TEXT(address.c_str()), &addrInfoIPV6.sin6_addr.u); // 127.0.0.1 is self
+			addrInfoIPV6.sin6_port = htons(PORT_NUMBER);
+			addrInfo = (sockaddr*)&addrInfoIPV6;
+		}
+		
+		int result = connect((SOCKET)clientSocket, addrInfo, family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+
+
+		//sockaddr_in addrInfoIPV4;
+		//addrInfoIPV4.sin_family = 
+		//InetPton(AdressFamilly(address.data()), TEXT(address.c_str()), &addrInfoIPV4.sin_addr.S_un.S_addr); // 127.0.0.1 is self
+		//addrInfoIPV4.sin_port = htons(PORT_NUMBER);
+
+		//int result = connect((SOCKET)clientSocket, (sockaddr*)&addrInfoIPV4, sizeof(in6_addr));
 
 		if (result == SOCKET_ERROR) {
 			ReportError(WSAGetLastError());
@@ -156,28 +198,26 @@ namespace LibNetwork {
 		}
 
 		DebugMessage("Connect successfull\n");
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	int Send(const uintptr_t& socketId, const TCPData& data)
+	int Send(const uintptr_t& socketId, void* data, int bufferSize)
 	{
-		int result = send(socketId, (const char*)&data, sizeof(TCPData), 0);
+		int result = send(socketId, (TCHAR*)data, bufferSize, 0);
 
 		if (result == SOCKET_ERROR) {
 			ReportError(WSAGetLastError());
 			return EXIT_send;
 		}
 
-		DebugMessage("Send successfull:\t");
-		DebugMessage(data.buffer);
-		DebugMessage("\n");
+		DebugMessage(TEXT("Send successfull.\n"));
 
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	int Receive(const uintptr_t& socketId, const TCPData& data)
+	int Receive(const uintptr_t& socketId, void* data, int bufferSize)
 	{
-		int result = recv(socketId, (char*)&data, sizeof(TCPData), 0);
+		int result = recv(socketId, (TCHAR*)data, bufferSize, 0);
 
 		if (result == SOCKET_ERROR) {
 			ReportError(WSAGetLastError());
@@ -190,27 +230,31 @@ namespace LibNetwork {
 		}
 
 		DebugMessage("Receive successfull\t");
-		DebugMessage(data.buffer);
+		//DebugMessage(data.buffer);
 		DebugMessage("\n");
 
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
-	TCPData& TCPData::WriteInBuffer(const char* info, size_t offset)
+	void LibNetwork::TCPData::SetBitOrder(void* buffer, size_t length, bool isNetworkToHost)
 	{
-		size_t infoLen = strlen(info);
-		size_t bufMax = (size_t)GetBufferSize();
-		size_t bufLen = bufMax - offset - 1;
+		if ((void*)(&this[1]) < (void*)(&((float*)buffer)[length])) {
+			DebugMessage(TEXT("Try to modify BitOrder out of buffer range\n"));
+			return;
+		}
 
-		memcpy_s(&(buffer[offset]), bufLen, info, std::min<size_t>(bufLen, infoLen));
-		buffer[std::min<size_t>(bufMax, infoLen + offset)] = '\0';
+		if (isNetworkToHost) {
+			for (size_t i = 0; i < length; i++) {
+				((float*)buffer)[i] = ntohf(((unsigned int*)buffer)[i]);
+			}
+			return;
+		}
 
-		return *this;
-	}
+		for (size_t i = 0; i < length; i++) {
+			((unsigned int*)buffer)[i] = htonf(((float*)buffer)[i]);
+		}
 
-	size_t TCPData::GetBufferSize()
-	{
-		return ARRAYSIZE(TCPData::buffer);
+
 	}
 
 
@@ -236,20 +280,29 @@ namespace LibNetwork {
 		return result;
 	}
 
-	const uintptr_t& ServerEvents::GetSocketId(const int& index)
+	bool ServerEvents::IsServerIndex(const int& index)
 	{
-		return m_events[index].fd;
+		return index >= 0 && index < m_startClientIndex;
 	}
 
-	int ServerEvents::AddServerEvent(const uintptr_t& serverId)
+	bool ServerEvents::IsClientIndex(const int& index)
 	{
-		if (!m_events.empty())
-			return EXIT_AddServerEvent;
-
-		this->AddClientEvent(serverId);
-		return EXIT_SUCCESS;
+		return index >= m_startClientIndex && index < m_events.size();
 	}
 
+	void ServerEvents::AddServerEvent(const uintptr_t& socketId)
+	{
+		m_startClientIndex++;
+		if (m_unusedEventBuffer.empty()) {
+			DebugMessage("Emplace event successfull\n");
+			m_events.emplace_back((SOCKET)socketId, (SHORT)POLLRDNORM, (SHORT)0);
+		}
+		else {
+			DebugMessage("Replace event successfull\n");
+			m_events[*m_unusedEventBuffer.begin()] = { socketId, POLLRDNORM, 0 };
+			m_unusedEventBuffer.erase(m_unusedEventBuffer.begin());
+		}
+	}
 
 	void ServerEvents::AddClientEvent(const uintptr_t& socketId)
 	{
@@ -271,6 +324,11 @@ namespace LibNetwork {
 				m_unusedEventBuffer.emplace(i);
 				m_events[i].fd = (SOCKET)-1;	//ignore when pooling
 				DebugMessage("Remove successfull\n");
+
+				if (i < m_startClientIndex) {
+					m_startClientIndex--;
+				}
+
 				return;
 			}
 		}
@@ -278,18 +336,20 @@ namespace LibNetwork {
 		DebugMessage("No Remove\n");
 	}
 
-	int ServerEvents::EvaluateEvents(uintptr_t& socketId, LibNetwork::TCPData& data, int& index)
+	int ServerEvents::EvaluateEvents(uintptr_t& socketId, void* data, int bufferSize, int& index)
 	{
 		int result;
-		if (index == 0 && m_events[0].revents & POLLRDNORM) { //server socket
-			socketId = m_events[index].fd;
-			return (result = Accept(m_events[0].fd, socketId)) == EXIT_SUCCESS? 1 : -1;
+		for (index; index < m_startClientIndex; index++) { //server
+			if (m_events[index].revents & POLLRDNORM) {
+				socketId = m_events[index].fd;
+				return (result = Accept(m_events[index].fd, socketId)) == FUNC_SUCCESS ? 1 : -1;
+			}
 		}
 
 		for (index; index < m_events.size(); index++) { //clients
 			if (m_events[index].revents & (POLLERR | POLLHUP | POLLRDNORM)) {
 				socketId = m_events[index].fd;
-				return (result = Receive(socketId, data)) == EXIT_SUCCESS? 0: -1; //same as return Receive
+				return (result = Receive(socketId, data, bufferSize)) == FUNC_SUCCESS? 0: -1; //same as return Receive
 			}
 		}
 
@@ -297,11 +357,6 @@ namespace LibNetwork {
 		DebugMessage("End of Events\n");
 		return -1;
 	}
-
-	enum class ClientEvents::EventType {
-		Client,
-		Console
-	};
 
 	ClientEvents::ClientEvents() : m_lpBuffer()
 	{
@@ -328,6 +383,8 @@ namespace LibNetwork {
 		int index = (int)m_events.size() - 1;
 		m_clientIds.emplace(index, socketId);
 
+		WaitForEvents(index);
+
 		return index;
 	}
 
@@ -346,21 +403,16 @@ namespace LibNetwork {
 		return (int)m_events.size() - 1;
 	}
 
-	void ClientEvents::RemoveEvent(const int& index)
-	{
-		index;
-	}
-
-	int ClientEvents::EvaluateEvent(const int& index, TCPData& data, std::vector<std::string>& allMessages, const size_t& maxMessageLen)
+	int ClientEvents::EvaluateEvent(const int& index, void* data, int bufferSize, std::vector<std::string>& allMessages, const size_t& maxMessageLen)
 	{
 		switch (m_typeEventsBuffer[index])
 		{
-		case EventType::Client: return Receive(m_clientIds[index], data);  break;
+		case EventType::Client: return Receive(m_clientIds[index], data, bufferSize);  break;
 		case EventType::Console: allMessages = this->ReadKeyboardInput(index, maxMessageLen);  break;
 		default: break;
 		}
 
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
 	static int I = 0;
@@ -381,7 +433,7 @@ namespace LibNetwork {
 
 		DebugMessage("Wait successfull: %d\n", I++);
 		index = result;
-		return EXIT_SUCCESS;
+		return FUNC_SUCCESS;
 	}
 
 	void ClientEvents::ClearConsoleInputs()
@@ -410,7 +462,7 @@ namespace LibNetwork {
 
 					if (c[0] == TEXT('\r')){
 						if (m_inputMessage[0].empty()) {
-							ConsoleMessage("\n\b");
+							//ConsoleMessage("\n\b");
 						}
 						else {
 							message = std::move(m_inputMessage);

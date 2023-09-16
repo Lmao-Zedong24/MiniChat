@@ -23,14 +23,34 @@ void ReportError(int errorCode)
 		NULL, errorCode, 0, (LPTSTR)&buffer, 0, nullptr);
 
 	if (tcharcount == 0) {
-		_tprintf(TEXT("ERROR: %d (fail to format message because error: %d)\r\n"), errorCode, GetLastError());
+		DebugMessage(TEXT("ERROR: %d (fail to format message because error: %d)\r\n"), errorCode, GetLastError());
 	}
 	else {
-		_tprintf(buffer);
+		DebugMessage(buffer);
 	}
 
 	HLOCAL freeSuccess = LocalFree(buffer);
 	if (freeSuccess != NULL) {
-		_tprintf(TEXT("fail to free buffer because error: %d\r\n"), GetLastError());
+		DebugMessage(TEXT("fail to free buffer because error: %d\r\n"), GetLastError());
 	}
+}
+
+void SaveCursor()
+{
+	ConsoleMessage(TEXT("\033[s"));
+}
+
+void RestoreCursor()
+{
+	ConsoleMessage(TEXT("\033[u"));
+}
+
+void EraseFoward()
+{
+	ConsoleMessage(TEXT("\033[J"));
+}
+
+void LineFeed()
+{
+	ConsoleMessage(TEXT("\n"));
 }
