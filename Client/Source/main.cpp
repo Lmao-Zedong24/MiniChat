@@ -28,12 +28,12 @@ int main()
 	int result;
 	ChatClient client;
 
-	if ((result = client.OpenClient()) != EXIT_SUCCESS)
+	if ((result = client.OpenClient()) != FUNC_SUCCESS)
 		return result;
 
 	client.Run();
 	
-	if ((result = client.CloseClient()) != EXIT_SUCCESS)
+	if ((result = client.CloseClient()) != FUNC_SUCCESS)
 		return result;
 
 	return EXIT_SUCCESS;

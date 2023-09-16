@@ -13,3 +13,8 @@
 
 std::string GetUserInput();
 void ReportError(int errorCode);
+
+void SaveCursor();
+void RestoreCursor();
+void EraseFoward();
+void LineFeed();

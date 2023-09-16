@@ -7,83 +7,81 @@
 
 using namespace LibNetwork;
 
-ChatServer::ChatServer() : m_serverSocket(0)
-{}
+ChatServer::ChatServer() 
+{
+}
+
 
 int ChatServer::OpenServer()
 {
 	int result = 0;
-	if ((result = Initialize()) != EXIT_SUCCESS)
+	if ((result = Initialize()) != FUNC_SUCCESS)
 		return result;
 
-	if ((result = CreateSocket(m_serverSocket)) != EXIT_SUCCESS)
-		return result;
+	for (int i = 0; i < ARRAYSIZE(m_serverSockets); i++) {
+		if ((result = CreateSocket(m_serverSockets[i], i == 0)) != FUNC_SUCCESS)
+			return result;
 
-	if ((result = BindSocket(m_serverSocket)) != EXIT_SUCCESS)
-		return result;
+		if ((result = BindSocket(m_serverSockets[i], i == 0)) != FUNC_SUCCESS)
+			return result;
 
-	if ((result = Listen(m_serverSocket, NUM_CLIENTS)) != EXIT_SUCCESS)
-		return result;
+		if ((result = Listen(m_serverSockets[i])) != FUNC_SUCCESS)
+			return result;
 
-	m_events.AddClientEvent(m_serverSocket);
+		m_events.AddServerEvent(m_serverSockets[i]);
+	}
 
-	return EXIT_SUCCESS;
+
+	return FUNC_SUCCESS;
 }
 
-int ChatServer::CloseServer()
+void ChatServer::CloseServer()
 {
 	int result = 0;
 	for (auto& skt : this->m_clientSockets) {
-		if ((result = CloseSocket(skt)) != EXIT_SUCCESS)
-			return result;
+		CloseSocket(skt);
 	}
 
-	if ((result = CloseSocket(this->m_serverSocket)) != EXIT_SUCCESS)
-		return result;
+	for (auto& socket : m_serverSockets) {
+		CloseSocket(socket);
+	}
 
-	if ((result = Disconnect()) != EXIT_SUCCESS)
-		return result;
-
-	return EXIT_SUCCESS;
+	result = Disconnect();
 }
 
-int ChatServer::Run()
+void ChatServer::Run()
 {
-	LibNetwork::TCPData data;
+	ChatData data;
 
 	while (true) { //main loop
 		int numEvents = m_events.WaitForEvents();
 		int eventIndex = 0;
 		uintptr_t socketId = (uintptr_t)-1;
-		data.type = TCPDataType::DEFAULT;
+		data.type = ChatDataType::DEFAULT;
 
 		while(numEvents-- > 0) {
-			int result = m_events.EvaluateEvents(socketId, data, eventIndex); //accept and receive here
+			int result = m_events.EvaluateEvents(socketId, (void*)&data, sizeof(ChatData), eventIndex); //accept and receive here
 
 			if (result < 0) {
 				DebugMessage("Ya donne Error EvaluateEvents\n");
-				if (eventIndex != 0) //if not accept error, remove client
+				if (m_events.IsClientIndex(eventIndex)) //if not accept error, remove client
 					this->RemoveClient(socketId);
 			}
 			else if (result == 1) { //accepted so needs name
 				this->AddClient(socketId);
 
-				data.type = TCPDataType::NAME;
+				data.type = ChatDataType::NAME;
 				data.WriteInBuffer("");
-				if (Send(socketId, data) != EXIT_SUCCESS)
+				if (Send(socketId, (void*)&data, sizeof(ChatData)) != FUNC_SUCCESS)
 					this->RemoveClient(socketId);
 			}
 			else if (result == 0){ //received
 				switch (data.type)
 				{
-				case TCPDataType::MESSAGE: DebugMessage("Got MESSAGE\n");	this->SendDataToClients(data, socketId); break; //rellay message to other clients
-				case TCPDataType::NAME: DebugMessage("Got NAME\n");	
-										data.type = TCPDataType::MESSAGE;
-										data.WriteInBuffer(	NEW_CLIENT_MESSAGE, //add to message and rellay to other clients
-															(m_clientNames.emplace(socketId, data.buffer).first)->second.length());
-										this->SendDataToClients(data, socketId); break;
-				case TCPDataType::DISCONNECT: //TODO: disconnect client
-				case TCPDataType::DEFAULT:	//TODO: default client
+				case ChatDataType::MESSAGE: DebugMessage("Got MESSAGE\n");	this->SendDataToClients(data, socketId); break; //rellay message to other clients
+				case ChatDataType::NAME: DebugMessage("Got NAME\n"); this->JoinNewClient(data, socketId);	 break;
+				case ChatDataType::DISCONNECT: //TODO: disconnect client
+				case ChatDataType::DEFAULT:	//TODO: default client
 				default:
 					break;
 				}
@@ -94,7 +92,7 @@ int ChatServer::Run()
 	}
 }
 
-void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
+void ChatServer::SendDataToClients(	ChatData& data,
 									const uintptr_t& ignoreClient)
 {
 	int result = 0;
@@ -104,7 +102,7 @@ void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
 		if (ignoreClient == m_clientSockets[i] || !m_clientNames.contains(m_clientSockets[i])) { //ignore or dont have name
 			continue;
 		}
-		if ((result = Send(this->m_clientSockets[i], data)) != EXIT_SUCCESS) {
+		if ((result = Send(this->m_clientSockets[i], (void*)&data, sizeof(ChatData))) != FUNC_SUCCESS) {
 			errorSocketBuffer.emplace(i, result);
 		}
 	}
@@ -115,7 +113,7 @@ void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
 	}
 }
 
-void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
+void ChatServer::SendDataToClients(	ChatData& data,
 									const std::unordered_set<uintptr_t>& ignoreClients)
 {
 	int result = 0;
@@ -125,7 +123,7 @@ void ChatServer::SendDataToClients(	const LibNetwork::TCPData& data,
 		if (ignoreClients.contains(m_clientSockets[i]) || m_clientNames.contains(m_clientSockets[i])) { //ignore or dont have name
 			continue;
 		}
-		if ((result = Send(this->m_clientSockets[i], data)) != EXIT_SUCCESS) {
+		if ((result = Send(this->m_clientSockets[i], (void*)&data, sizeof(ChatData))) != FUNC_SUCCESS) {
 			errorSocketBuffer.emplace(i, result);
 		}
 	}
@@ -152,12 +150,37 @@ void ChatServer::RemoveClient(const uintptr_t& socketId)
 	}
 }
 
+void ChatServer::JoinNewClient(ChatData& data, const uintptr_t& newClientId)
+{
+	data.type = ChatDataType::MESSAGE;
+	data.WriteInBuffer(NEW_CLIENT_MESSAGE, (m_clientNames.emplace(newClientId, data.buffer).first)->second.length());
+	this->SendDataToClients(data, newClientId);
+
+
+	if (m_clientNames.size() == 1) {
+		data.WriteInBuffer(ONLY_CLIENTS_MESSAGE);
+		Send(newClientId, (void*)&data, sizeof(ChatData));
+		return;
+	}
+
+
+	data.WriteInBuffer(CURRENT_CLIENTS_MESSAGE);
+	Send(newClientId, (void*)&data, sizeof(ChatData));
+
+	for (auto& name : m_clientNames) {
+		if (name.first != newClientId) {
+			data.WriteInBuffer(name.second.c_str());
+			Send(newClientId, (void*)&data, sizeof(ChatData));
+		}
+	}
+}
+
 //void ChatServer::InterpretReceive(	int result,
 //									int index, 
-//									const TCPData& data, 
+//									const ChatData& data, 
 //									std::unordered_set<int>& closeSocketBuffer)
 //{
-//	if (result != EXIT_SUCCESS) { 
+//	if (result != FUNC_SUCCESS) { 
 //		ReportError(result); //TODO : remove report error here
 //		closeSocketBuffer.insert(index);
 //		return;
